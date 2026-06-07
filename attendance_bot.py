@@ -13,7 +13,8 @@ from telegram.ext import (
 )
 
 # ========== CẤU HÌNH ==========
-BOT_TOKEN = "7567655803:AAEYCkpZtJfRmxapBbHxdb9-oaPbg3DUTeE"
+import os
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "7567655803:AAEYCkpZtJfRmxapBbHxdb9-oaPbg3DUTeE")
 DB_FILE = "chamcong.db"
 
 logging.basicConfig(
@@ -364,18 +365,39 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         trang_thai_cu = trang_thai[3]
         phut_di = phut_tu_luc(trang_thai[4])
         
+        hanh_dong_map = {
+            "hut_thuoc": "HÚT THUỐC",
+            "wc": "WC",
+            "goi_dien": "GỌI ĐIỆN",
+            "nghi_chieu": "NGHỈ CHIỀU",
+        }
+        hanh_dong_key = hanh_dong_map.get(trang_thai_cu, "")
+        
         them_ra_ngoai(user_id, phut_di)
         log_hanh_dong(user_id, ten, username, f"TRỞ LẠI (sau {mo_ta_trang_thai(trang_thai_cu)})")
         set_trang_thai(user_id, ten, username, "len_ca")
         
+        so_lan = dem_so_lan(user_id, hanh_dong_key) if hanh_dong_key else 0
+        so_lan_text = f"• Số lần hôm nay: *{so_lan} lần*\n" if so_lan > 0 else ""
+        
         await query.message.reply_text(
             f"🔄 *{ten}* đã trở lại lúc *{now_str}*\n"
             f"• Vừa: {mo_ta_trang_thai(trang_thai_cu)}\n"
-            f"• Thời gian ra ngoài: *{format_tg(phut_di)}*\n\n"
+            f"• Thời gian vừa đi: *{format_tg(phut_di)}*\n"
+            f"{so_lan_text}\n"
             f"💪 Làm việc tiếp nào!",
             parse_mode="Markdown",
             reply_markup=main_keyboard()
         )
+
+def dem_so_lan(user_id, hanh_dong_key):
+    ngay = datetime.now().strftime("%Y-%m-%d")
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM chamcong WHERE user_id=? AND hanh_dong=? AND ngay=?", (user_id, hanh_dong_key, ngay))
+    count = c.fetchone()[0]
+    conn.close()
+    return count
 
 def check_dang_lam(trang_thai) -> bool:
     return trang_thai and trang_thai[3] not in ("xuong_ca", None)
